@@ -1,0 +1,833 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+
+// --- INLINE SVG ICONS (Replacing lucide-react which causes import errors) ---
+
+const Icon = ({ children, size = 24, className = "" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    {children}
+  </svg>
+);
+
+const MapPin = (props) => (
+  <Icon {...props}>
+    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </Icon>
+);
+const Calendar = (props) => (
+  <Icon {...props}>
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </Icon>
+);
+const Search = (props) => (
+  <Icon {...props}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </Icon>
+);
+const X = (props) => (
+  <Icon {...props}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </Icon>
+);
+const ChevronDown = (props) => (
+  <Icon {...props}>
+    <polyline points="6 9 12 15 18 9" />
+  </Icon>
+);
+const Clock = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </Icon>
+);
+const Navigation = (props) => (
+  <Icon {...props}>
+    <polygon points="3 11 22 2 13 21 11 13 3 11" />
+  </Icon>
+);
+const Info = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="16" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12.01" y2="8" />
+  </Icon>
+);
+const LayoutGrid = (props) => (
+  <Icon {...props}>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <line x1="3" y1="11" x2="21" y2="11" />
+    <line x1="11" y1="3" x2="11" y2="21" />
+  </Icon>
+);
+const History = (props) => (
+  <Icon {...props}>
+    <path d="M3 12a9 9 0 0 0 9 9 9 9 0 0 0 9-9h-2a7 7 0 0 1-7 7 7 7 0 0 1-7-7z" />
+    <polyline points="12 4 12 12 17 17" />
+    <path d="M21 12a9 9 0 0 0-9-9" />
+  </Icon>
+);
+const Menu = (props) => (
+  <Icon {...props}>
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <line x1="4" y1="6" x2="20" y2="6" />
+    <line x1="4" y1="18" x2="20" y2="18" />
+  </Icon>
+);
+const User = (props) => (
+  <Icon {...props}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </Icon>
+);
+
+
+// --- LEAFLET CDN LINKS ---
+const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+
+// --- MOCK DATA ---
+
+const BRANCHES = ['AGRA', 'DELHI', 'MUMBAI', 'PUNE'];
+
+const EMPLOYEES = [
+  { id: 'AV7046', name: 'Abhishek Tomar', label: 'AV7046 | Abhishek Tomar' },
+  { id: 'AV21581', name: 'Rahul Singh', label: 'AV21581 | Rahul Singh' },
+  { id: 'AV9921', name: 'Priya Sharma', label: 'AV9921 | Priya Sharma' },
+];
+
+const ACTIVITY_TYPES = ['All Activities', 'Collection', 'Follow-up', 'Visit'];
+
+// Seeded loan activity data
+const GENERATE_MOCK_LOANS = (empId) => {
+  if (!empId) return [];
+  
+  // Center around Agra for demo
+  const BASE_LAT = 27.1767;
+  const BASE_LNG = 78.0081;
+
+  return [
+    {
+      loan_id: "HL0000000251575",
+      customer_name: "NAFEESA",
+      emp_id: empId,
+      activity_type: "Collection",
+      time_of_visit: "15:19:55",
+      distance_from_branch_km: 0.6,
+      distance_from_soa_latlng_km: 0.7,
+      posted_lat: 27.1810,
+      posted_lng: 78.0100,
+      status: "Collected",
+      remarks: "Part payment received"
+    },
+    {
+      loan_id: "HL0000000251999",
+      customer_name: "RAJESH KUMAR",
+      emp_id: empId,
+      activity_type: "Follow-up",
+      time_of_visit: "11:30:22",
+      distance_from_branch_km: 2.1,
+      distance_from_soa_latlng_km: 1.5,
+      posted_lat: 27.1650,
+      posted_lng: 78.0250,
+      status: "Not Collected",
+      remarks: "Customer not available"
+    },
+    {
+      loan_id: "HL0000000252101",
+      customer_name: "AMIT VERMA",
+      emp_id: empId,
+      activity_type: "Collection",
+      time_of_visit: "13:45:10",
+      distance_from_branch_km: 5.4,
+      distance_from_soa_latlng_km: 0.2,
+      posted_lat: 27.1950,
+      posted_lng: 77.9850,
+      status: "Follow-Up Done",
+      remarks: "Promise to pay next week"
+    },
+    {
+      loan_id: "HL0000000252333",
+      customer_name: "SNEHA GUPTA",
+      emp_id: empId,
+      activity_type: "Visit",
+      time_of_visit: "16:10:05",
+      distance_from_branch_km: 1.2,
+      distance_from_soa_latlng_km: 1.1,
+      posted_lat: 27.1700,
+      posted_lng: 77.9900,
+      status: "miFIN Sync Successful",
+      remarks: "Synced automatically"
+    },
+    {
+      loan_id: "HL0000000252888",
+      customer_name: "VIKRAM SINGH",
+      emp_id: empId,
+      activity_type: "Collection",
+      time_of_visit: "10:05:00",
+      distance_from_branch_km: 8.5,
+      distance_from_soa_latlng_km: 0.05,
+      posted_lat: 27.1500,
+      posted_lng: 78.0500,
+      status: "Follow-Up Done & Collection Pending",
+      remarks: "Cheque collected"
+    }
+  ];
+};
+
+const MOCK_TIMELINE_EVENTS = [
+  { type: "Login", time: "08:52 am", dist: "0.001 km", cumDist: "0.001 km", appUsage: "00:00:05", icon: "login" },
+  { type: "Activity", time: "10:05 am", dist: "8.5 km", cumDist: "8.501 km", appUsage: "00:15:30", icon: "activity" },
+  { type: "Activity", time: "11:30 am", dist: "3.2 km", cumDist: "11.701 km", appUsage: "00:25:10", icon: "activity" },
+  { type: "Activity", time: "01:45 pm", dist: "5.1 km", cumDist: "16.801 km", appUsage: "00:45:20", icon: "activity" },
+  { type: "Activity", time: "03:19 pm", dist: "2.8 km", cumDist: "19.601 km", appUsage: "01:10:00", icon: "activity" },
+  { type: "Logout", time: "06:30 pm", dist: "0 km", cumDist: "19.601 km", appUsage: "01:15:00", icon: "logout" }
+];
+
+// Color mapping from Requirements
+const STATUS_COLORS = {
+  'Collected': '#22c55e', // Green
+  'Not Collected': '#ef4444', // Red
+  'Follow-Up Done': '#eab308', // Yellow
+  'miFIN Sync Successful': '#3b82f6', // Blue
+  'Follow-Up Done & Collection Pending': '#f97316', // Orange
+  'Default': '#94a3b8' // Slate
+};
+
+// --- COMPONENTS ---
+
+// 1. Searchable Dropdown
+const SearchableSelect = ({ options, placeholder, value, onChange, labelKey = 'label' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [wrapperRef]);
+
+  const filteredOptions = options.filter(opt => 
+    opt[labelKey].toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleSelect = (option) => {
+    onChange(option);
+    setIsOpen(false);
+    setSearch('');
+  };
+
+  const clearSelection = (e) => {
+    e.stopPropagation();
+    onChange(null);
+  };
+
+  return (
+    <div className="relative w-full mb-3" ref={wrapperRef}>
+      <div 
+        className="bg-blue-800/50 hover:bg-blue-800/70 border border-blue-700 rounded p-2 flex items-center justify-between cursor-pointer text-white text-sm transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className={!value ? "text-blue-200" : ""}>
+          {value ? value[labelKey] : placeholder}
+        </span>
+        <div className="flex items-center">
+          {value && (
+            <X 
+              size={14} 
+              className="mr-2 text-blue-300 hover:text-white" 
+              onClick={clearSelection}
+            />
+          )}
+          <ChevronDown size={16} className="text-blue-300" />
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white rounded shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
+          <div className="p-2 sticky top-0 bg-white border-b">
+            <div className="flex items-center bg-gray-100 rounded px-2">
+              <Search size={14} className="text-gray-400" />
+              <input
+                type="text"
+                className="w-full bg-transparent p-2 text-sm outline-none text-gray-700"
+                placeholder="Search..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </div>
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((opt, idx) => (
+              <div
+                key={idx}
+                className="p-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer"
+                onClick={() => handleSelect(opt)}
+              >
+                {opt[labelKey]}
+              </div>
+            ))
+          ) : (
+            <div className="p-2 text-sm text-gray-500 text-center">No results found</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 2. Map Component (Dynamic Loading)
+const LeafletMap = ({ data, selectedMarkerId, onMarkerClick, filteredStatus }) => {
+  const mapRef = useRef(null);
+  const markersRef = useRef({});
+  const mapInstanceRef = useRef(null);
+  const [libLoaded, setLibLoaded] = useState(false);
+
+  // Load Leaflet Dynamically
+  useEffect(() => {
+    if (window.L && window.L.map) {
+      setLibLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = LEAFLET_JS;
+    script.async = true;
+    script.onload = () => {
+        // Wait briefly for L.map to be attached to window.L object after script execution
+        setTimeout(() => {
+             if (window.L && window.L.map) {
+                 setLibLoaded(true);
+             } else {
+                 console.error("Leaflet loaded but L.map is missing.");
+             }
+        }, 100);
+    };
+    document.body.appendChild(script);
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = LEAFLET_CSS;
+    document.head.appendChild(link);
+
+    return () => {
+      // Cleanup not strictly necessary for single page usage
+    };
+  }, []);
+
+  // Initialize Map
+  useEffect(() => {
+    if (!libLoaded || !mapRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    // Use window.L and ensure L.map is a function before calling it (Fix for L.map is not a function)
+    const L = window.L;
+    if (typeof L === 'undefined' || typeof L.map !== 'function') {
+        console.error("Leaflet initialization failed: L or L.map not available.");
+        return;
+    }
+
+    const map = L.map(mapRef.current).setView([20.5937, 78.9629], 5);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, [libLoaded]);
+
+  // Handle Data Changes & Markers
+  useEffect(() => {
+    if (!libLoaded || !mapInstanceRef.current) return;
+    
+    const L = window.L;
+    const map = mapInstanceRef.current;
+    
+    // Safety check just in case L disappeared somehow
+    if (!L || !map) return;
+
+
+    // Clear existing markers
+    Object.values(markersRef.current).forEach(marker => marker.remove());
+    markersRef.current = {};
+
+    if (!data || data.length === 0) {
+        return;
+    }
+
+    const bounds = L.latLngBounds();
+
+    data.forEach(loan => {
+      // Filter logic if a sidebar summary item is clicked
+      if (filteredStatus && loan.status !== filteredStatus) return;
+
+      const color = STATUS_COLORS[loan.status] || STATUS_COLORS['Default'];
+      const isSelected = loan.loan_id === selectedMarkerId;
+
+      // Custom Dot Icon
+      const iconHtml = `
+        <div style="
+          background-color: ${color};
+          width: ${isSelected ? '24px' : '16px'};
+          height: ${isSelected ? '24px' : '16px'};
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        ">
+          ${isSelected ? '<div style="width: 8px; height: 8px; background: white; border-radius: 50%;"></div>' : ''}
+        </div>
+      `;
+
+      const customIcon = L.divIcon({
+        className: 'custom-map-marker',
+        html: iconHtml,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -12]
+      });
+
+      const marker = L.marker([loan.posted_lat, loan.posted_lng], { icon: customIcon })
+        .addTo(map)
+        .bindPopup(`
+          <div class="font-sans min-w-[200px]">
+            <div class="font-bold text-blue-900 border-b pb-1 mb-2">${loan.customer_name}</div>
+            <div class="text-xs space-y-1">
+              <div class="flex justify-between"><span class="text-gray-500">Loan ID:</span> <span class="font-medium">${loan.loan_id}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Activity:</span> <span class="font-medium">${loan.activity_type}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Time:</span> <span class="font-medium">${loan.time_of_visit}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Status:</span> <span class="font-medium" style="color:${color}">${loan.status}</span></div>
+              <hr class="my-1"/>
+              <div><span class="text-gray-500">Dist. from Branch:</span> ${loan.distance_from_branch_km} km</div>
+              <div><span class="text-gray-500">Dist. from SOA:</span> ${loan.distance_from_soa_latlng_km} km</div>
+            </div>
+            <div class="mt-2 text-center">
+              <button class="bg-blue-600 text-white text-xs px-2 py-1 rounded hover:bg-blue-700 w-full" onclick="document.dispatchEvent(new CustomEvent('marker-nav', {detail: '${loan.loan_id}'}))">
+                View Full Record
+              </button>
+            </div>
+          </div>
+        `);
+
+      marker.on('click', () => {
+        onMarkerClick(loan);
+      });
+
+      // If this marker is selected, open popup
+      if (isSelected) {
+        setTimeout(() => marker.openPopup(), 100);
+      }
+
+      markersRef.current[loan.loan_id] = marker;
+      bounds.extend([loan.posted_lat, loan.posted_lng]);
+    });
+
+    if (Object.keys(markersRef.current).length > 0) {
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    }
+
+  }, [data, selectedMarkerId, filteredStatus, libLoaded]); 
+
+  return <div ref={mapRef} className="w-full h-full z-0 bg-gray-200" />;
+};
+
+
+// 3. Main Application
+export default function FieldActivityTracker() {
+  // --- STATE ---
+  const [filters, setFilters] = useState({
+    branch: '',
+    user: null,
+    activity: 'All Activities',
+    date: new Date().toISOString().split('T')[0]
+  });
+
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loans, setLoans] = useState([]);
+  const [selectedLoan, setSelectedLoan] = useState(null);
+  const [filteredStatus, setFilteredStatus] = useState(null); // For sidebar interaction
+  const [activeTab, setActiveTab] = useState('summary'); // 'summary' | 'timeline' | 'info'
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Mobile toggle
+
+  // --- HANDLERS ---
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleReset = () => {
+    setFilters({
+      branch: '',
+      user: null,
+      activity: 'All Activities',
+      date: new Date().toISOString().split('T')[0]
+    });
+    setHasLoaded(false);
+    setLoans([]);
+    setSelectedLoan(null);
+    setFilteredStatus(null);
+  };
+
+  const handleGo = () => {
+    if (!filters.user) {
+      // Replaced alert with console log/visual feedback
+      console.warn("Please select a user first.");
+      // In a real app, you'd show a custom toast/modal here.
+      return;
+    }
+    setLoading(true);
+    // Simulate API delay
+    setTimeout(() => {
+      const newLoans = GENERATE_MOCK_LOANS(filters.user.id);
+      setLoans(newLoans);
+      setHasLoaded(true);
+      setLoading(false);
+      setActiveTab('summary');
+    }, 800);
+  };
+
+  const handleSidebarCountClick = (status) => {
+    // Toggle filter
+    if (filteredStatus === status) {
+      setFilteredStatus(null);
+    } else {
+      setFilteredStatus(status);
+    }
+  };
+
+  // Derived Statistics
+  const stats = useMemo(() => {
+    const counts = {
+      'Collected': 0,
+      'Not Collected': 0,
+      'Follow-Up Done': 0,
+      // Note: "No Follow-Up" is usually derived, but keeping the original keys
+      // 'No Follow-Up': 0, 
+      'miFIN Sync Successful': 0,
+      'Follow-Up Done & Collection Pending': 0
+    };
+
+    loans.forEach(loan => {
+      // Map raw status to buckets if needed, or use direct exact matches
+      if (counts.hasOwnProperty(loan.status)) {
+        counts[loan.status]++;
+      } else {
+         // Fallback logic for statuses not strictly in the initial list
+         if(loan.status.includes('Collected')) counts['Collected']++;
+         else counts['Not Collected']++;
+      }
+    });
+    return counts;
+  }, [loans]);
+
+  // Listener for popup button click (since it's inside HTML string)
+  useEffect(() => {
+    const handleNav = (e) => {
+      const loanId = e.detail;
+      const loan = loans.find(l => l.loan_id === loanId);
+      if (loan) setSelectedLoan(loan);
+    };
+    document.addEventListener('marker-nav', handleNav);
+    return () => document.removeEventListener('marker-nav', handleNav);
+  }, [loans]);
+
+  // --- RENDER ---
+  return (
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-gray-100 font-sans">
+      
+      {/* Mobile Header / Sidebar Toggle */}
+      <div className="md:hidden bg-[#2e3b84] p-3 text-white flex justify-between items-center shadow-md z-50">
+        <h1 className="font-semibold text-sm">Activity Tracker</h1>
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+          <Menu size={24} />
+        </button>
+      </div>
+
+      <div className="flex flex-1 h-full relative">
+        
+        {/* --- LEFT SIDEBAR PANEL --- */}
+        <div 
+          className={`
+            absolute md:relative z-40 bg-white h-full shadow-xl transition-all duration-300 ease-in-out flex flex-col
+            ${isSidebarOpen ? 'w-full md:w-[380px] translate-x-0' : 'w-[380px] -translate-x-full md:translate-x-0 md:w-[380px]'}
+          `}
+        >
+          {/* 1. Header & Filters Section (Blue) */}
+          <div className="bg-[#2e3b84] p-5 shrink-0 shadow-lg relative">
+            <div className="flex items-center justify-center mb-4">
+              <div className="flex flex-col items-center">
+                 <div className="bg-white/10 p-2 rounded-full mb-1">
+                    <User className="text-white" size={20}/>
+                 </div>
+                 <h2 className="text-white font-semibold text-lg">Activity</h2>
+                 <div className="h-0.5 w-16 bg-white/50 mt-1"></div>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="space-y-3">
+              {/* Branch Select */}
+              <div className="relative">
+                <select 
+                  className="w-full bg-blue-800/50 text-white border border-blue-700 rounded p-2 text-sm appearance-none outline-none focus:border-white transition-colors cursor-pointer"
+                  value={filters.branch}
+                  onChange={(e) => handleFilterChange('branch', e.target.value)}
+                >
+                  <option value="" className="text-gray-500">Select Branch</option>
+                  {BRANCHES.map(b => <option key={b} value={b} className="text-gray-800">{b}</option>)}
+                </select>
+                <ChevronDown className="absolute right-2 top-2.5 text-blue-300 pointer-events-none" size={16} />
+              </div>
+
+              {/* User Select (Typeahead) */}
+              <SearchableSelect 
+                options={EMPLOYEES} 
+                placeholder="Select User" 
+                value={filters.user} 
+                onChange={(val) => handleFilterChange('user', val)} 
+              />
+
+              {/* Activity Select */}
+               <div className="relative">
+                <select 
+                  className="w-full bg-blue-800/50 text-white border border-blue-700 rounded p-2 text-sm appearance-none outline-none focus:border-white transition-colors cursor-pointer"
+                  value={filters.activity}
+                  onChange={(e) => handleFilterChange('activity', e.target.value)}
+                >
+                  {ACTIVITY_TYPES.map(a => <option key={a} value={a} className="text-gray-800">{a}</option>)}
+                </select>
+                <X className="absolute right-8 top-2.5 text-blue-300 hover:text-white cursor-pointer" size={14} />
+                <ChevronDown className="absolute right-2 top-2.5 text-blue-300 pointer-events-none" size={16} />
+              </div>
+
+              {/* Date & Buttons Row */}
+              <div className="flex gap-2 mt-4">
+                <div className="flex-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                        <Calendar size={16} className="text-white/80" />
+                    </div>
+                   {/* Custom styled date input */}
+                    <input 
+                      type="date" 
+                      className="w-full pl-8 pr-2 py-2 bg-orange-400/90 text-white rounded border-none text-sm outline-none font-medium placeholder-white"
+                      value={filters.date}
+                      onChange={(e) => handleFilterChange('date', e.target.value)}
+                    />
+                </div>
+                <button 
+                  onClick={handleReset}
+                  className="bg-white text-[#2e3b84] px-4 py-2 rounded text-sm font-bold hover:bg-gray-100 transition-colors shadow-sm"
+                >
+                  RESET
+                </button>
+                <button 
+                  onClick={handleGo}
+                  className="bg-white text-[#2e3b84] px-6 py-2 rounded text-sm font-bold hover:bg-gray-100 transition-colors shadow-sm"
+                >
+                  GO
+                </button>
+              </div>
+            </div>
+            
+            {/* Toggle Button for Sidebar (Desktop only collapse could go here, omitting for simplicity/adherence to screenshot) */}
+          </div>
+
+          {/* 2. Content Area (Below Blue Header) */}
+          <div className="flex-1 overflow-y-auto bg-gray-50 flex flex-col">
+            {!hasLoaded ? (
+              <div className="p-4 flex flex-col items-center justify-center h-full text-gray-400">
+                <LayoutGrid size={48} strokeWidth={1} className="mb-2 opacity-50"/>
+                <p className="text-sm font-medium">TOTAL NUMBER OF EMPLOYEES: 0</p>
+                <p className="text-xs mt-2 text-center max-w-[200px]">Select a user and click GO to view activity data.</p>
+              </div>
+            ) : (
+              <>
+                 {/* Tabs */}
+                 <div className="flex border-b bg-white shadow-sm">
+                   <button 
+                    onClick={() => setActiveTab('summary')}
+                    className={`flex-1 py-3 text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 'summary' ? 'border-[#2e3b84] text-[#2e3b84]' : 'border-transparent text-gray-500 hover:bg-gray-50'}`}
+                   >
+                     <LayoutGrid size={14} /> Summary
+                   </button>
+                   <button 
+                    onClick={() => setActiveTab('timeline')}
+                    className={`flex-1 py-3 text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 'timeline' ? 'border-[#2e3b84] text-[#2e3b84]' : 'border-transparent text-gray-500 hover:bg-gray-50'}`}
+                   >
+                     <History size={14} /> Timeline
+                   </button>
+                   <button 
+                    onClick={() => setActiveTab('info')}
+                    className={`flex-1 py-3 text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 'info' ? 'border-[#2e3b84] text-[#2e3b84]' : 'border-transparent text-gray-500 hover:bg-gray-50'}`}
+                   >
+                     <Info size={14} /> Info
+                   </button>
+                 </div>
+
+                 {/* Tab Content */}
+                 <div className="flex-1 overflow-y-auto p-0">
+                   
+                   {/* A. SUMMARY TAB */}
+                   {activeTab === 'summary' && (
+                     <div className="p-4 space-y-4">
+                       <div className="bg-white p-3 rounded shadow-sm border border-gray-100">
+                         <div className="text-xs text-gray-500 uppercase font-bold mb-2">Employee Details</div>
+                         <div className="flex justify-between text-sm mb-1">
+                           <span className="text-gray-600">ID:</span>
+                           <span className="font-semibold text-gray-900">{filters.user?.id}</span>
+                         </div>
+                         <div className="flex justify-between text-sm">
+                           <span className="text-gray-600">Date:</span>
+                           <span className="font-semibold text-gray-900">{filters.date}</span>
+                         </div>
+                       </div>
+
+                       <div className="space-y-2">
+                         <p className="text-xs font-bold text-gray-500 uppercase tracking-wide px-1">Activity Counts</p>
+                         {Object.entries(stats).map(([label, count]) => {
+                           const color = STATUS_COLORS[label] || STATUS_COLORS['Default'];
+                           const isSelected = filteredStatus === label;
+                           return (
+                             <div 
+                               key={label}
+                               onClick={() => handleSidebarCountClick(label)}
+                               className={`
+                                 flex justify-between items-center p-3 rounded cursor-pointer transition-all border
+                                 ${isSelected ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300 shadow-sm' : 'bg-white border-gray-100 hover:border-blue-100 hover:shadow-sm'}
+                               `}
+                             >
+                               <div className="flex items-center gap-3">
+                                 <div 
+                                  className="w-3 h-3 rounded-full shadow-sm"
+                                  style={{ backgroundColor: color }}
+                                 />
+                                 <span className={`text-sm ${isSelected ? 'font-semibold text-blue-900' : 'text-gray-700'}`}>
+                                   {label}
+                                 </span>
+                               </div>
+                               <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded-full min-w-[24px] text-center">
+                                 {count}
+                               </span>
+                             </div>
+                           );
+                         })}
+                       </div>
+                       
+                       <div className="mt-4 pt-4 border-t">
+                         <button className="w-full border border-dashed border-gray-300 text-gray-500 py-2 rounded text-sm hover:bg-gray-50 hover:text-gray-700 hover:border-gray-400 transition-colors">
+                           Export Summary (PDF)
+                         </button>
+                       </div>
+                     </div>
+                   )}
+
+                   {/* B. TIMELINE TAB */}
+                   {activeTab === 'timeline' && (
+                     <div className="p-4 relative">
+                        {/* Vertical Line */}
+                        <div className="absolute left-[34px] top-6 bottom-6 w-0.5 bg-gray-200"></div>
+
+                        {MOCK_TIMELINE_EVENTS.map((event, idx) => (
+                          <div key={idx} className="flex gap-4 mb-6 relative">
+                            {/* Icon Bubble */}
+                            <div className="z-10 bg-white border-2 border-gray-200 rounded-full w-10 h-10 flex items-center justify-center shrink-0">
+                                {event.icon === 'login' && <User size={16} className="text-green-600"/>}
+                                {event.icon === 'logout' && <User size={16} className="text-red-500"/>}
+                                {event.icon === 'activity' && <MapPin size={16} className="text-blue-500"/>}
+                            </div>
+                            {/* Card */}
+                            <div className="flex-1 bg-white p-3 rounded shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                                <div className="flex justify-between items-start mb-1">
+                                    <h4 className="font-semibold text-sm text-gray-800">Activity Type : {event.type}</h4>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex items-center text-xs text-gray-500">
+                                        <Clock size={12} className="mr-1.5" />
+                                        Activity Time : {event.time}
+                                    </div>
+                                    <div className="flex items-center text-xs text-gray-500">
+                                        <Navigation size={12} className="mr-1.5" />
+                                        Distance Travelled : {event.dist}
+                                    </div>
+                                    <div className="text-xs text-gray-400 pl-4">
+                                        Cumulative : {event.cumDist}
+                                    </div>
+                                    <div className="flex items-center text-xs text-gray-500 pt-1">
+                                        <History size={12} className="mr-1.5" />
+                                        App Usage Time : {event.appUsage}
+                                    </div>
+                                </div>
+                            </div>
+                          </div>
+                        ))}
+                     </div>
+                   )}
+
+                   {/* C. INFO TAB */}
+                   {activeTab === 'info' && (
+                     <div className="p-6 text-center text-gray-500">
+                       <Info className="mx-auto mb-2 opacity-50" size={32} />
+                       <p className="text-sm">General Information and Employee Meta-data would appear here.</p>
+                     </div>
+                   )}
+
+                 </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* --- RIGHT MAP AREA --- */}
+        <div className="flex-1 relative bg-gray-200">
+           {loading && (
+             <div className="absolute inset-0 z-50 bg-white/50 backdrop-blur-sm flex items-center justify-center">
+               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900"></div>
+             </div>
+           )}
+           
+           <LeafletMap 
+             data={loans} 
+             selectedMarkerId={selectedLoan?.loan_id}
+             onMarkerClick={setSelectedLoan}
+             filteredStatus={filteredStatus}
+           />
+
+           {/* Back to CMS floating button */}
+           <div className="absolute top-4 right-4 z-[400] bg-white shadow-md rounded flex items-center px-4 py-2 cursor-pointer hover:bg-gray-50 border border-gray-200">
+               <span className="text-xs font-semibold text-gray-600 mr-2">Back To CMS</span>
+               <div className="w-2 h-2 bg-blue-900 rounded-full"></div>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
